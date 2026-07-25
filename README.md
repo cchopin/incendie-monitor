@@ -6,7 +6,7 @@ Dashboard temps réel de suivi des feux de forêt en France : détections satell
 
 ## Modes d'affichage
 
-- **Foyers** : points chauds satellites VIIRS (NASA FIRMS) regroupés en incidents, zones brûlées EFFIS, panneau des principaux foyers en cours triés par puissance radiative.
+- **Foyers** : points chauds satellites VIIRS (NASA FIRMS) regroupés en incidents, panneau des principaux foyers en cours triés par puissance radiative.
 - **Risque feu** : indice de danger météo (Chandler ajusté vent/pluie) calculé sur une grille d'environ 25 km couvrant la métropole, lissé en dégradé continu, avec sélecteur de jour (aujourd'hui à J+4) et grille 5 jours pour les zones prioritaires (feux en cours d'abord).
 - **Qualité de l'air** : indice européen EAQI sur la même grille fine (modèle CAMS ~11 km), avec classement par département (PM2.5, PM10, ozone).
 
@@ -55,7 +55,7 @@ Le script rsync le projet, installe l'environnement Python, pose le service syst
 
 | Source | Données | Accès |
 |---|---|---|
-| Copernicus EFFIS (WMS) | Foyers satellites 24h/7j, zones brûlées, indice FWI | Libre, sans clé |
+| Copernicus EFFIS (WMS) | Indice de danger FWI (couche raster optionnelle) | Libre, sans clé |
 | NASA FIRMS | Foyers cliquables, statistiques, incidents en cours | Clé MAP_KEY gratuite |
 | Open-Meteo | Météo temps réel, grilles risque feu et qualité de l'air | Libre, sans clé |
 | BigDataCloud | Géocodage inverse des principaux foyers | Libre, sans clé |
