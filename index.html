@@ -322,7 +322,16 @@ const layerDefs = [
   {id:'baSeason', name:'Zones brûlées (saison)',          color:'#5a2b1e', on:false, make: () => wms('modis.ba.poly.season', null, 0.7),
    desc:'Périmètres brûlés cumulés sur la saison (MODIS)'},
   {id:'fwi',      name:'Danger feu FWI (raster EFFIS)',   color:'#e8d44d', on:false, make: () => wms('mf010.fwi', d(0), 0.45),
-   desc:'Fire Weather Index : danger feu météo européen, raster journalier EFFIS. Premier affichage lent (tuiles générées à la demande côté Copernicus), rapide ensuite grâce au cache.'},
+   desc:'Fire Weather Index : danger feu météo européen, raster journalier EFFIS. Premier affichage lent (tuiles générées à la demande côté Copernicus), rapide ensuite grâce au cache.',
+   /* classes officielles EFFIS du Fire Weather Index */
+   legendHtml:
+     '<span style="background:#63a95e">&lt;5.2 très faible</span>' +
+     '<span style="background:#b8c95c">5.2-11 faible</span>' +
+     '<span style="background:#e8d44d">11-21 modéré</span>' +
+     '<span style="background:#e08a3c">21-38 élevé</span>' +
+     '<span style="background:#d0402e;color:#fff">38-50 très élevé</span>' +
+     '<span style="background:#8a1d1d;color:#fff">50-70 extrême</span>' +
+     '<span style="background:#3d0f0f;color:#fff">&ge;70 très extrême</span>'},
 ];
 const activeLayers = {};
 const layerInputs = {};
@@ -336,12 +345,29 @@ function initLayers() {
       <span class="sw" style="background:${def.color}"></span>${def.name}`;
     const input = row.querySelector('input');
     layerInputs[def.id] = input;
+    let legendDiv = null;
+    if (def.legendHtml) {
+      /* légende de la couche, affichée quand elle est active */
+      legendDiv = document.createElement('div');
+      legendDiv.className = 'air-legend';
+      legendDiv.style.display = 'none';
+      legendDiv.innerHTML = def.legendHtml;
+    }
     input.onchange = e => {
-      if (e.target.checked) { activeLayers[def.id] = def.make(); activeLayers[def.id].addTo(map); }
-      else if (activeLayers[def.id]) { map.removeLayer(activeLayers[def.id]); delete activeLayers[def.id]; }
+      if (e.target.checked) {
+        activeLayers[def.id] = def.make(); activeLayers[def.id].addTo(map);
+        if (legendDiv) legendDiv.style.display = 'flex';
+      } else if (activeLayers[def.id]) {
+        map.removeLayer(activeLayers[def.id]); delete activeLayers[def.id];
+        if (legendDiv) legendDiv.style.display = 'none';
+      }
     };
     ctl.appendChild(row);
-    if (def.on) { activeLayers[def.id] = def.make(); activeLayers[def.id].addTo(map); }
+    if (legendDiv) ctl.appendChild(legendDiv);
+    if (def.on) {
+      activeLayers[def.id] = def.make(); activeLayers[def.id].addTo(map);
+      if (legendDiv) legendDiv.style.display = 'flex';
+    }
   });
 }
 function setLayer(id, on) {
