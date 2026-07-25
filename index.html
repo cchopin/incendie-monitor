@@ -313,10 +313,6 @@ function wms(layer, time, opacity) {
   return l;
 }
 const layerDefs = [
-  {id:'ba',       name:'Zones brûlées temps réel',        color:'#7a3b2e', on:true,  make: () => wms('effis.nrt.ba.poly', null, 0.75),
-   desc:'Périmètres brûlés cartographiés en temps quasi réel (EFFIS)'},
-  {id:'baSeason', name:'Zones brûlées (saison)',          color:'#5a2b1e', on:false, make: () => wms('modis.ba.poly.season', null, 0.7),
-   desc:'Périmètres brûlés cumulés sur la saison (MODIS)'},
   {id:'fwi',      name:'Danger feu FWI (raster EFFIS)',   color:'#e8d44d', on:false, make: () => wms('mf010.fwi', d(0), 0.45),
    desc:'Fire Weather Index : danger feu météo européen, raster journalier EFFIS. Premier affichage lent (tuiles générées à la demande côté Copernicus), rapide ensuite grâce au cache.',
    /* classes officielles EFFIS du Fire Weather Index */
@@ -406,18 +402,18 @@ function setMode(m) {
   if (m === 'feu') {
     map.addLayer(firmsGroup); map.addLayer(zoneMarkers);
     map.removeLayer(airGroup); map.removeLayer(prevGroup);
-    setLayer('fwi', false); setLayer('ba', true);
+    setLayer('fwi', false);
     renderRiskList();
   } else if (m === 'prev') {
     map.removeLayer(firmsGroup); map.addLayer(zoneMarkers);
     map.removeLayer(airGroup); map.addLayer(prevGroup);
-    setLayer('ba', false);
+
     renderRiskList();
     loadPrev();
   } else { // air
     map.removeLayer(firmsGroup); map.removeLayer(zoneMarkers);
     map.removeLayer(prevGroup); map.addLayer(airGroup);
-    setLayer('fwi', false); setLayer('ba', false);
+    setLayer('fwi', false);
     renderAirList();
     loadAir();
   }
