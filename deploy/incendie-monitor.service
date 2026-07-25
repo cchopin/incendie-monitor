@@ -1,0 +1,22 @@
+[Unit]
+Description=Incendie monitor - backend de cache
+After=network.target
+
+[Service]
+Type=simple
+User=tely
+WorkingDirectory=/home/tely/incendie-monitoring
+# Clé FIRMS lue depuis config.js (déployé par rsync, hors git)
+# IP autorisées à déclencher des fetchs amont sans limite (optionnel) :
+# Environment=TRUSTED_IPS=1.2.3.4,5.6.7.8
+ExecStart=/home/tely/incendie-monitoring/.venv/bin/uvicorn server:app --host 127.0.0.1 --port 8081
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

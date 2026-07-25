@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Incendie monitor - France</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --bg:#0a0e14; --panel:#111722; --panel2:#161e2c; --border:#1f2a3d;
+  --txt:#c8d3e0; --txt-dim:#6b7a8f; --accent:#ff6b35; --accent2:#ffb347;
+  --ok:#3ddc84; --warn:#ffb347; --err:#ff4d4d;
+  --mono:'SF Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font-family:var(--mono);font-size:13px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:14px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+header h1{font-size:15px;letter-spacing:2px;color:var(--accent);font-weight:700;text-transform:uppercase}
+header h1 span{color:var(--txt)}
+.modes{display:flex;gap:4px;margin-left:10px}
+.mode-btn{background:var(--panel2);color:var(--txt-dim);border:1px solid var(--border);padding:4px 12px;font-family:var(--mono);font-size:11px;cursor:pointer;border-radius:3px;letter-spacing:.5px}
+.mode-btn:hover{color:var(--txt)}
+.mode-btn.active{background:#2a1a10;color:var(--accent);border-color:var(--accent)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--txt-dim)}
+#clock{color:var(--txt);font-size:13px}
+#countdown{color:var(--accent2)}
+button{background:var(--panel2);color:var(--txt);border:1px solid var(--border);padding:4px 10px;font-family:var(--mono);font-size:11px;cursor:pointer;border-radius:3px}
+button:hover{border-color:var(--accent);color:var(--accent)}
+main{display:grid;grid-template-columns:330px 1fr 330px;gap:8px;padding:8px;flex:1;min-height:0}
+.col{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:4px;display:flex;flex-direction:column;min-height:0}
+.panel-h{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--txt-dim);flex-shrink:0}
+.panel-h .dot{width:7px;height:7px;border-radius:50%;background:var(--txt-dim);flex-shrink:0}
+.dot.ok{background:var(--ok)}.dot.err{background:var(--err)}.dot.load{background:var(--warn);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.3}}
+.panel-b{overflow-y:auto;flex:1;min-height:0}
+.panel-b::-webkit-scrollbar{width:6px}
+.panel-b::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+#map{flex:1;background:#0d1420;border-radius:4px;min-height:0}
+.leaflet-container{background:#0d1420;font-family:var(--mono)}
+/* news */
+.news-item{padding:8px 10px;border-bottom:1px solid var(--border)}
+.news-item:hover{background:var(--panel2)}
+.news-item a{color:var(--txt);text-decoration:none;font-size:12px;line-height:1.45;display:block}
+.news-item a:hover{color:var(--accent2)}
+.news-meta{display:flex;gap:8px;margin-top:4px;font-size:10px;color:var(--txt-dim)}
+.news-meta .src{color:var(--accent)}
+.news-item.hot a{color:var(--accent2)}
+/* risk */
+.risk-row{display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--border);font-size:11.5px}
+.risk-row .zone{width:105px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.risk-row .zone .fdot{color:var(--err);margin-right:3px}
+.risk-row .vals{color:var(--txt-dim);flex:1;text-align:right;white-space:nowrap}
+.badge{padding:1px 7px;border-radius:3px;font-size:10px;font-weight:700;flex-shrink:0;min-width:66px;text-align:center}
+.b-faible{background:#12331f;color:var(--ok)}
+.b-modere{background:#333012;color:#e8d44d}
+.b-eleve{background:#3a2a12;color:var(--warn)}
+.b-treseleve{background:#3a1c12;color:var(--accent)}
+.b-extreme{background:#3a1212;color:var(--err)}
+/* prévision heatmap */
+.fx-table{display:grid;font-size:10.5px;padding:4px 8px 8px}
+.fx-table .cell{padding:3px 2px;text-align:center;border-radius:2px;margin:1px;font-weight:700;cursor:default}
+.fx-table .zlabel{text-align:right;padding:3px 8px 3px 2px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fx-table .zlabel .fdot{color:var(--err)}
+.fx-table .dlabel{text-align:center;color:var(--txt-dim);padding:3px 2px;text-transform:uppercase;font-size:9.5px}
+/* foyers en cours */
+.fire-row{padding:6px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:11.5px}
+.fire-row:hover{background:var(--panel2)}
+.fire-row .top{display:flex;align-items:center;gap:8px}
+.fire-row .loc{color:var(--accent2);font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fire-row .frp{color:var(--err);font-weight:700}
+.fire-row .sub{color:var(--txt-dim);font-size:10px;margin-top:2px}
+/* links + accounts */
+.link-row{display:block;padding:6px 10px;border-bottom:1px solid var(--border);color:var(--txt);text-decoration:none;font-size:11.5px}
+.link-row:hover{background:var(--panel2);color:var(--accent2)}
+.link-row .d{color:var(--txt-dim);font-size:10px;display:block;margin-top:2px}
+.acc-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.acc-grid .link-row:nth-child(odd){border-right:1px solid var(--border)}
+/* stats */
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center}
+.stat{padding:8px 4px;border-right:1px solid var(--border)}
+.stat:last-child{border-right:none}
+.stat .v{font-size:20px;color:var(--accent);font-weight:700}
+.stat .l{font-size:9.5px;color:var(--txt-dim);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+/* layers */
+.lyr-row{display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--border);font-size:11.5px;cursor:pointer}
+.lyr-row:hover{background:var(--panel2)}
+.lyr-row input{accent-color:var(--accent)}
+.lyr-row .sw{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+/* firms key */
+.firms-box{padding:8px 10px;display:flex;gap:6px}
+.firms-box input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--txt);padding:4px 8px;font-family:var(--mono);font-size:11px;border-radius:3px}
+.hint{padding:0 10px 8px;font-size:10px;color:var(--txt-dim);line-height:1.5}
+.hint a{color:var(--accent)}
+/* légende air */
+.air-legend{display:flex;gap:2px;padding:6px 10px;font-size:9px;color:var(--txt-dim);flex-wrap:wrap}
+.air-legend span{padding:2px 6px;border-radius:2px;color:#08131f;font-weight:700}
+/* sélecteur de jour (mode prévision) */
+.day-ctl{display:flex;gap:3px;background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:3px}
+.day-ctl button{border:1px solid transparent;font-size:10px;padding:3px 8px}
+.day-ctl button.active{background:#2a1a10;color:var(--accent);border-color:var(--accent)}
+footer{display:flex;gap:18px;padding:5px 14px;background:var(--panel);border-top:1px solid var(--border);font-size:10.5px;color:var(--txt-dim);flex-shrink:0;flex-wrap:wrap}
+footer .s{display:flex;align-items:center;gap:5px}
+footer .dot{width:6px;height:6px;border-radius:50%;background:var(--txt-dim)}
+.fire-tip{font-size:11px;line-height:1.5}
+@media(max-width:1100px){main{grid-template-columns:1fr;overflow-y:auto}#map{min-height:420px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Incendie <span>monitor</span></h1>
+  <div class="modes">
+    <button class="mode-btn active" data-mode="feu">Foyers</button>
+    <button class="mode-btn" data-mode="prev">Risque feu</button>
+    <button class="mode-btn" data-mode="air">Qualité de l'air</button>
+  </div>
+  <div class="hdr-right">
+    <span id="backend-tag" style="display:none;color:var(--ok)">backend</span>
+    <span id="clock">--:--:--</span>
+    <span>maj auto <span id="countdown">10:00</span></span>
+    <button id="btn-refresh">Actualiser</button>
+  </div>
+</header>
+
+<main>
+  <!-- colonne gauche : foyers en cours + actualités -->
+  <div class="col">
+    <div class="panel" style="flex-shrink:0;max-height:42%">
+      <div class="panel-h"><span class="dot" id="dot-fires"></span>Principaux foyers en cours<span style="margin-left:auto" id="fires-count"></span></div>
+      <div class="panel-b" id="fires-list"><div style="padding:12px;color:var(--txt-dim)">Chargement…</div></div>
+    </div>
+    <div class="panel" style="flex:1">
+      <div class="panel-h"><span class="dot" id="dot-news"></span>Fil actualités incendies<span style="margin-left:auto" id="news-count"></span></div>
+      <div class="panel-b" id="news-list"><div style="padding:12px;color:var(--txt-dim)">Chargement…</div></div>
+    </div>
+  </div>
+
+  <!-- colonne centrale : carte -->
+  <div class="col">
+    <div class="panel" style="flex-shrink:0">
+      <div class="stats">
+        <div class="stat"><div class="v" id="st-hs24">—</div><div class="l">foyers 24h (FIRMS)</div></div>
+        <div class="stat"><div class="v" id="st-hs48">—</div><div class="l">foyers 48h (FIRMS)</div></div>
+        <div class="stat"><div class="v" id="st-frp">—</div><div class="l">FRP max MW</div></div>
+      </div>
+    </div>
+    <div id="map"></div>
+    <div class="panel" style="flex-shrink:0;max-height:240px" id="panel-fx">
+      <div class="panel-h"><span class="dot" id="dot-fx"></span>Danger feu météo — 5 jours<span style="margin-left:auto;font-size:9.5px">feux en cours d'abord • indice Chandler + vent + pluie</span></div>
+      <div class="panel-b" id="fx-grid"><div style="padding:10px;color:var(--txt-dim)">Chargement…</div></div>
+    </div>
+  </div>
+
+  <!-- colonne droite -->
+  <div class="col">
+    <div class="panel" style="flex-shrink:0">
+      <div class="panel-h"><span class="dot ok"></span>Couches carte</div>
+      <div id="layers-ctl"></div>
+      <div class="air-legend" id="air-legend" style="display:none">
+        <span style="background:#50f0e6">0-20 bon</span>
+        <span style="background:#50ccaa">20-40 correct</span>
+        <span style="background:#f0e641">40-60 moyen</span>
+        <span style="background:#ff5050;color:#fff">60-80 mauvais</span>
+        <span style="background:#960032;color:#fff">80-100 très mauvais</span>
+        <span style="background:#7d2181;color:#fff">100+ extrême</span>
+      </div>
+      <div class="air-legend" id="prev-legend" style="display:none">
+        <span style="background:#3ddc84">faible</span>
+        <span style="background:#e8d44d">modéré</span>
+        <span style="background:#ffb347">élevé</span>
+        <span style="background:#ff6b35">très élevé</span>
+        <span style="background:#ff4d4d">extrême</span>
+      </div>
+    </div>
+    <div class="panel" style="flex:1;min-height:140px">
+      <div class="panel-h"><span class="dot" id="dot-meteo"></span><span id="risk-title">Risque météo par zone</span></div>
+      <div class="panel-b" id="risk-list"><div style="padding:12px;color:var(--txt-dim)">Chargement…</div></div>
+    </div>
+    <div class="panel" style="flex-shrink:0" id="firms-panel">
+      <div class="panel-h"><span class="dot" id="dot-firms"></span>NASA FIRMS (optionnel)</div>
+      <div class="firms-box"><input id="firms-key" type="password" placeholder="MAP_KEY FIRMS" autocomplete="off"><button id="firms-save">OK</button></div>
+      <div class="hint">Clé gratuite sur <a href="https://firms.modaps.eosdis.nasa.gov/api/map_key/" target="_blank">firms.modaps.eosdis.nasa.gov</a> pour afficher les foyers en points cliquables et les statistiques.</div>
+    </div>
+    <div class="panel" style="flex-shrink:0;max-height:200px">
+      <div class="panel-h"><span class="dot ok"></span>Comptes X officiels</div>
+      <div class="panel-b acc-grid" id="acc-list"></div>
+    </div>
+    <div class="panel" style="flex-shrink:0;max-height:170px">
+      <div class="panel-h"><span class="dot ok"></span>Cartes et sources officielles</div>
+      <div class="panel-b" id="links-list"></div>
+    </div>
+  </div>
+</main>
+
+<footer id="status-bar"></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="config.js"></script><!-- optionnel : définit window.FIRMS_KEY, non versionné -->
+<script>
+'use strict';
+/* ============================================================
+   Incendie monitor - France
+   Dashboard OSINT feux de forêt. Fonctionne seul (mode direct)
+   ou derrière le backend de cache server.py (détecté au boot).
+   ============================================================ */
+
+const REFRESH_S = 600;
+const FR_BBOX = [-5.8, 41.2, 9.9, 51.3];
+const DEFAULT_FIRMS_KEY = window.FIRMS_KEY || '';
+let BACKEND = false;
+
+/* ---------- horloge + compte à rebours ---------- */
+let nextRefresh = REFRESH_S;
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('fr-FR');
+  nextRefresh--;
+  if (nextRefresh <= 0) { nextRefresh = REFRESH_S; refreshAll(); }
+  const m = String(Math.floor(nextRefresh/60)).padStart(2,'0');
+  const s = String(nextRefresh%60).padStart(2,'0');
+  document.getElementById('countdown').textContent = `${m}:${s}`;
+}, 1000);
+document.getElementById('btn-refresh').onclick = () => { nextRefresh = REFRESH_S; refreshAll(); };
+
+/* ---------- état des sources ---------- */
+const sources = {};
+function setStatus(id, label, state) {
+  sources[id] = {label, state, t: new Date()};
+  document.getElementById('status-bar').innerHTML = Object.values(sources).map(s =>
+    `<span class="s"><span class="dot" style="background:${
+      s.state==='ok' ? 'var(--ok)' : s.state==='err' ? 'var(--err)' : 'var(--warn)'
+    }"></span>${s.label} ${s.state==='ok' ? s.t.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : s.state==='err' ? 'erreur' : '…'}</span>`
+  ).join('');
+  const dot = document.getElementById('dot-'+id);
+  if (dot) dot.className = 'dot ' + (state==='ok' ? 'ok' : state==='err' ? 'err' : 'load');
+}
+
+/* ---------- fetch direct avec repli proxy CORS (mode sans backend) ---------- */
+async function fetchText(url) {
+  const attempts = [
+    url,
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+    'https://corsproxy.io/?url=' + encodeURIComponent(url),
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
+  ];
+  for (const u of attempts) {
+    try {
+      const r = await fetch(u, {signal: AbortSignal.timeout(20000)});
+      if (r.ok) { const t = await r.text(); if (t && t.length > 50) return t; }
+    } catch(e) { /* essai suivant */ }
+  }
+  throw new Error('fetch failed: ' + url);
+}
+
+/* ============================================================
+   CARTE
+   ============================================================ */
+const map = L.map('map', {zoomControl: true}).setView([45.5, 3.5], 6);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO', maxZoom: 18
+}).addTo(map);
+
+/* contours des départements + centroïdes ; le même GeoJSON sert de fond aux
+   choroplèthes qualité de l'air et prévision (remplissage par département) */
+let deptCentroids = [];
+let deptPrev = null;
+const deptReady = fetch('https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson')
+  .then(r => r.json())
+  .then(gj => {
+    gj.features.forEach((f, i) => f._idx = i);
+    L.geoJSON(gj, {style:{color:'#2a3a52',weight:1,fill:false,opacity:.8}, interactive:false}).addTo(map);
+    deptCentroids = gj.features.map(f => {
+      const pts = [];
+      (function walk(c){ typeof c[0] === 'number' ? pts.push(c) : c.forEach(walk); })(f.geometry.coordinates);
+      return {
+        n: f.properties.nom,
+        lat: pts.reduce((s,p)=>s+p[1],0)/pts.length,
+        lon: pts.reduce((s,p)=>s+p[0],0)/pts.length,
+      };
+    });
+    deptPrev = L.geoJSON(gj, {
+      style: prevStyle,
+      onEachFeature: (f, l) => l.bindTooltip(() => prevTip(f), {sticky: true})
+    });
+    prevGroup.addLayer(deptPrev);
+  }).catch(()=>{});
+
+function d(offset) {
+  return new Date(Date.now() + offset*86400000).toISOString().slice(0,10);
+}
+
+/* ---------- couches WMS EFFIS ---------- */
+let EFFIS = 'https://maps.effis.emergency.copernicus.eu/effis';
+function wms(layer, time, opacity) {
+  const opt = {
+    layers: layer, format: 'image/png', transparent: true,
+    version: '1.1.1', opacity: opacity ?? 0.85, attribution: 'Copernicus EFFIS',
+    tileSize: 512, updateWhenIdle: true, keepBuffer: 4,
+  };
+  if (time) opt.TIME = time;
+  const l = L.tileLayer.wms(EFFIS, opt);
+  l.on('loading', () => setStatus('effis', 'EFFIS WMS', 'load'));
+  l.on('load', () => setStatus('effis', 'EFFIS WMS', 'ok'));
+  /* l'amont EFFIS rate parfois une tuile (génération à la demande) :
+     on retente jusqu'à 2 fois, le cache du backend rend le retry quasi gratuit */
+  l.on('tileerror', e => {
+    setStatus('effis', 'EFFIS WMS', 'err');
+    const img = e.tile, n = +(img.dataset.retry || 0);
+    if (n < 2) {
+      img.dataset.retry = n + 1;
+      setTimeout(() => { img.src = l.getTileUrl(e.coords); }, 1500 * (n + 1));
+    }
+  });
+  return l;
+}
+const layerDefs = [
+  {id:'hs24',     name:'Foyers satellites 24h (WMS)',     color:'#ff4d4d', on:false, make: () => wms('all.hs', `${d(-1)}/${d(0)}`),
+   desc:'Détections satellites des dernières 24 h (raster Copernicus EFFIS)'},
+  {id:'hs7',      name:'Foyers satellites 7 jours (WMS)', color:'#b03030', on:false, make: () => wms('all.hs', `${d(-7)}/${d(0)}`),
+   desc:'Détections satellites des 7 derniers jours (raster Copernicus EFFIS)'},
+  {id:'ba',       name:'Zones brûlées temps réel',        color:'#7a3b2e', on:true,  make: () => wms('effis.nrt.ba.poly', null, 0.75),
+   desc:'Périmètres brûlés cartographiés en temps quasi réel (EFFIS)'},
+  {id:'baSeason', name:'Zones brûlées (saison)',          color:'#5a2b1e', on:false, make: () => wms('modis.ba.poly.season', null, 0.7),
+   desc:'Périmètres brûlés cumulés sur la saison (MODIS)'},
+  {id:'fwi',      name:'Danger feu FWI (raster EFFIS)',   color:'#e8d44d', on:false, make: () => wms('mf010.fwi', d(0), 0.45),
+   desc:'Fire Weather Index : danger feu météo européen, raster journalier EFFIS. Premier affichage lent (tuiles générées à la demande côté Copernicus), rapide ensuite grâce au cache.'},
+];
+const activeLayers = {};
+const layerInputs = {};
+function initLayers() {
+  const ctl = document.getElementById('layers-ctl');
+  layerDefs.forEach(def => {
+    const row = document.createElement('label');
+    row.className = 'lyr-row';
+    if (def.desc) row.title = def.desc;
+    row.innerHTML = `<input type="checkbox" ${def.on?'checked':''}>
+      <span class="sw" style="background:${def.color}"></span>${def.name}`;
+    const input = row.querySelector('input');
+    layerInputs[def.id] = input;
+    input.onchange = e => {
+      if (e.target.checked) { activeLayers[def.id] = def.make(); activeLayers[def.id].addTo(map); }
+      else if (activeLayers[def.id]) { map.removeLayer(activeLayers[def.id]); delete activeLayers[def.id]; }
+    };
+    ctl.appendChild(row);
+    if (def.on) { activeLayers[def.id] = def.make(); activeLayers[def.id].addTo(map); }
+  });
+}
+function setLayer(id, on) {
+  const input = layerInputs[id];
+  if (input && input.checked !== on) { input.checked = on; input.dispatchEvent(new Event('change')); }
+}
+let wmsDay = d(0);
+function refreshWms() {
+  if (d(0) === wmsDay) return; // couches journalières : reload au changement de jour
+  wmsDay = d(0);
+  Object.keys(activeLayers).forEach(id => {
+    map.removeLayer(activeLayers[id]);
+    activeLayers[id] = layerDefs.find(x=>x.id===id).make();
+    activeLayers[id].addTo(map);
+  });
+}
+
+/* ============================================================
+   MODES D'AFFICHAGE : foyers / prévision / qualité de l'air
+   ============================================================ */
+const canvasR = L.canvas({padding: 0.3});
+let firmsGroup = L.layerGroup().addTo(map);
+let zoneMarkers = L.layerGroup().addTo(map);
+let airGroup = L.layerGroup();   // choroplèthe qualité de l'air
+let prevGroup = L.layerGroup();  // choroplèthe risque prévision
+let mode = 'feu';
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.mode-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.mode === m));
+  document.getElementById('air-legend').style.display = m==='air' ? 'flex' : 'none';
+  document.getElementById('prev-legend').style.display = m==='prev' ? 'flex' : 'none';
+  const fx = document.getElementById('panel-fx');
+  fx.style.display = m==='air' ? 'none' : '';
+  fx.style.maxHeight = m==='prev' ? '45%' : '240px';
+  document.getElementById('risk-title').textContent =
+    m==='air' ? "Qualité de l'air par département" : 'Risque météo par zone';
+  dayCtlShow(m === 'prev');
+  if (m === 'feu') {
+    map.addLayer(firmsGroup); map.addLayer(zoneMarkers);
+    map.removeLayer(airGroup); map.removeLayer(prevGroup);
+    setLayer('fwi', false); setLayer('ba', true);
+    renderRiskList();
+  } else if (m === 'prev') {
+    map.removeLayer(firmsGroup); map.addLayer(zoneMarkers);
+    map.removeLayer(airGroup); map.addLayer(prevGroup);
+    setLayer('ba', false);
+    renderRiskList();
+    loadPrev();
+  } else { // air
+    map.removeLayer(firmsGroup); map.removeLayer(zoneMarkers);
+    map.removeLayer(prevGroup); map.addLayer(airGroup);
+    setLayer('fwi', false); setLayer('ba', false); setLayer('hs24', false);
+    renderAirList();
+    loadAir();
+  }
+}
+document.querySelectorAll('.mode-btn').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+
+/* ============================================================
+   NASA FIRMS : foyers + incidents
+   ============================================================ */
+const keyInput = document.getElementById('firms-key');
+keyInput.value = localStorage.getItem('firmsKey') || DEFAULT_FIRMS_KEY;
+document.getElementById('firms-save').onclick = () => {
+  localStorage.setItem('firmsKey', keyInput.value.trim());
+  refreshAll();
+};
+
+function parseCsv(text) {
+  const lines = text.trim().split('\n');
+  const head = lines[0].split(',');
+  return lines.slice(1).map(l => {
+    const c = l.split(','); const o = {};
+    head.forEach((h,i) => o[h] = c[i]); return o;
+  });
+}
+
+let currentIncidents = [];   // incidents regroupés, pour les zones dynamiques
+
+async function loadFirms() {
+  const key = localStorage.getItem('firmsKey') || DEFAULT_FIRMS_KEY;
+  if (!BACKEND && !key) {
+    setStatus('firms', 'FIRMS', 'err');
+    document.getElementById('fires-list').innerHTML =
+      '<div style="padding:12px;color:var(--txt-dim)">Clé FIRMS requise (panneau de droite)</div>';
+    return;
+  }
+  setStatus('firms', 'FIRMS', 'load');
+  try {
+    const url = BACKEND ? '/api/firms'
+      : `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${key}/VIIRS_SNPP_NRT/${FR_BBOX.join(',')}/2`;
+    const rows = parseCsv(await fetchText(url));
+    firmsGroup.clearLayers();
+    const now = Date.now();
+    let n24 = 0, n48 = 0, frpMax = 0;
+    const pts = [];
+    rows.forEach(r => {
+      const lat = +r.latitude, lon = +r.longitude, frp = +r.frp || 0;
+      if (!lat || !lon) return;
+      const t = new Date(`${r.acq_date}T${String(r.acq_time).padStart(4,'0').replace(/(\d\d)(\d\d)/,'$1:$2')}:00Z`);
+      const ageH = (now - t) / 3.6e6;
+      n48++; if (ageH <= 24) n24++;
+      if (frp > frpMax) frpMax = frp;
+      const recent = ageH <= 24;
+      pts.push({lat, lon, frp, t, recent});
+      L.circleMarker([lat, lon], {   // halo
+        renderer: canvasR, radius: Math.min(6 + Math.sqrt(frp)*1.5, 22),
+        color: 'transparent', fillColor: recent ? '#ff4d1a' : '#8a4a3a',
+        fillOpacity: .18, weight: 0, interactive: false
+      }).addTo(firmsGroup);
+      L.circleMarker([lat, lon], {
+        renderer: canvasR, radius: Math.min(3.5 + Math.sqrt(frp), 12),
+        color: recent ? '#ffd24d' : '#8a4a3a',
+        fillColor: recent ? '#ff6b35' : '#6a3a2e',
+        fillOpacity: .9, weight: 1.2
+      }).bindPopup(
+        `<div class="fire-tip"><b>Point chaud détecté par satellite</b> (VIIRS)<br>` +
+        `Passage : ${r.acq_date} ${String(r.acq_time).padStart(4,'0')} UTC<br>` +
+        `Puissance radiative (FRP) : ${frp.toFixed(1)} MW<br>` +
+        `Confiance détection : ${r.confidence}<br>` +
+        `<a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank">Google Maps</a></div>`
+      ).addTo(firmsGroup);
+    });
+    document.getElementById('st-hs24').textContent = n24;
+    document.getElementById('st-hs48').textContent = n48;
+    document.getElementById('st-frp').textContent = frpMax ? frpMax.toFixed(0) : '0';
+    setStatus('firms', 'FIRMS', 'ok');
+    await renderIncidents(pts);
+  } catch(e) {
+    setStatus('firms', 'FIRMS', 'err');
+    document.getElementById('fires-list').innerHTML =
+      '<div style="padding:12px;color:var(--txt-dim)">Données FIRMS indisponibles</div>';
+  }
+}
+
+/* ---------- regroupement des détections en incidents ---------- */
+/* cache persistant : un même foyer ne re-déclenche pas le géocodage
+   à chaque refresh ni à chaque rechargement de la page */
+let geoCache = {};
+try { geoCache = JSON.parse(localStorage.getItem('geoCache') || '{}'); } catch(e) {}
+function saveGeoCache() {
+  const keys = Object.keys(geoCache);
+  if (keys.length > 400) keys.slice(0, keys.length - 400).forEach(k => delete geoCache[k]);
+  try { localStorage.setItem('geoCache', JSON.stringify(geoCache)); } catch(e) {}
+}
+async function reverseGeo(lat, lon) {
+  const k = lat.toFixed(2) + ',' + lon.toFixed(2);
+  if (geoCache[k]) return geoCache[k];
+  try {
+    const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=fr`,
+      {signal: AbortSignal.timeout(8000)});
+    const j = await r.json();
+    const name = [j.city || j.locality, j.principalSubdivision].filter(Boolean).join(', ');
+    geoCache[k] = name || k;
+    saveGeoCache();
+  } catch(e) { geoCache[k] = k; }
+  return geoCache[k];
+}
+
+async function renderIncidents(pts) {
+  const el = document.getElementById('fires-list');
+  if (!pts.length) {
+    el.innerHTML = '<div style="padding:12px;color:var(--ok)">Aucun foyer détecté par satellite sur 48h</div>';
+    document.getElementById('fires-count').textContent = '';
+    document.getElementById('dot-fires').className = 'dot ok';
+    currentIncidents = [];
+    return;
+  }
+  const cells = {};
+  pts.forEach(p => {
+    const k = Math.round(p.lat/0.09) + '_' + Math.round(p.lon/0.09);
+    (cells[k] = cells[k] || []).push(p);
+  });
+  const incidents = Object.values(cells).map(g => ({
+    lat: g.reduce((s,p)=>s+p.lat,0)/g.length,
+    lon: g.reduce((s,p)=>s+p.lon,0)/g.length,
+    n: g.length,
+    frp: g.reduce((s,p)=>s+p.frp,0),
+    last: new Date(Math.max(...g.map(p=>+p.t))),
+    active: g.some(p=>p.recent),
+  })).sort((a,b) => b.frp - a.frp);
+
+  document.getElementById('fires-count').textContent = incidents.length + ' incidents';
+  document.getElementById('dot-fires').className = 'dot ' + (incidents.some(i=>i.active) ? 'err' : 'ok');
+
+  const top = incidents.slice(0, 12);
+  await Promise.allSettled(top.map(async i => { i.name = await reverseGeo(i.lat, i.lon); }));
+  currentIncidents = incidents;
+  el.innerHTML = top.map((i, idx) =>
+    `<div class="fire-row" data-i="${idx}">
+      <div class="top"><span class="loc">${i.name || '?'}</span>
+      <span class="frp">${i.frp.toFixed(0)} MW</span></div>
+      <div class="sub">${i.n} détection${i.n>1?'s':''} • dernière il y a ${timeAgo(i.last)}${i.active?' • ACTIF':''}</div>
+    </div>`
+  ).join('');
+  el.querySelectorAll('.fire-row').forEach(row => {
+    row.onclick = () => { const i = top[+row.dataset.i]; map.setView([i.lat, i.lon], 11); };
+  });
+}
+
+/* ============================================================
+   MÉTÉO / RISQUE : zones statiques + zones dynamiques (feux réels)
+   ============================================================ */
+const staticZones = [
+  {n:'Perpignan',    lat:42.70, lon:2.90},
+  {n:'Carcassonne',  lat:43.21, lon:2.35},
+  {n:'Montpellier',  lat:43.61, lon:3.88},
+  {n:'Nîmes',        lat:43.84, lon:4.36},
+  {n:'Avignon',      lat:43.95, lon:4.81},
+  {n:'Marseille',    lat:43.30, lon:5.37},
+  {n:'Toulon',       lat:43.12, lon:5.93},
+  {n:'Draguignan',   lat:43.54, lon:6.47},
+  {n:'Nice',         lat:43.70, lon:7.27},
+  {n:'Ajaccio',      lat:41.92, lon:8.74},
+  {n:'Bastia',       lat:42.70, lon:9.45},
+  {n:'Mont-de-Marsan',lat:43.89,lon:-0.50},
+  {n:'Bordeaux',     lat:44.84, lon:-0.58},
+  {n:'Valence',      lat:44.93, lon:4.89},
+];
+
+/* fusion : les feux en cours deviennent des zones de suivi prioritaires.
+   Coordonnées arrondies à 0,1° : le centroïde d'un incident bouge un peu à
+   chaque passage satellite, sans arrondi chaque refresh changerait la clé de
+   cache météo du backend et re-déclencherait Open-Meteo pour rien. */
+function buildZones() {
+  const zlist = staticZones.map(z => ({...z, fire: false, fireFrp: 0}));
+  currentIncidents.filter(i => i.frp >= 5).slice(0, 10).forEach(i => {
+    const near = zlist.find(z => Math.hypot(z.lat - i.lat, z.lon - i.lon) < 0.25);
+    if (near) { near.fire = true; near.fireFrp = Math.max(near.fireFrp, i.frp); }
+    else zlist.push({
+      n: (i.name || (i.lat.toFixed(1)+','+i.lon.toFixed(1))).split(',')[0],
+      lat: Math.round(i.lat*10)/10, lon: Math.round(i.lon*10)/10,
+      fire: true, fireFrp: i.frp
+    });
+  });
+  return zlist;
+}
+
+function chandler(T, RH) {
+  return (((110 - 1.373*RH) - 0.54*(10.20 - T)) * (124 * Math.pow(10, -0.0142*RH))) / 60;
+}
+function cbiLevel(v) {
+  if (v < 50)   return {t:'Faible',     c:'b-faible'};
+  if (v < 75)   return {t:'Modéré',     c:'b-modere'};
+  if (v < 90)   return {t:'Élevé',      c:'b-eleve'};
+  if (v < 97.5) return {t:'Très élevé', c:'b-treseleve'};
+  return          {t:'Extrême',    c:'b-extreme'};
+}
+
+let riskRows = [];
+function renderRiskList() {
+  if (mode === 'air') return;
+  if (!riskRows.length) return;
+  document.getElementById('risk-list').innerHTML = riskRows.map(r =>
+    `<div class="risk-row"><span class="zone">${r.fire?'<span class="fdot">●</span>':''}${r.n}</span>` +
+    `<span class="badge ${r.lvl.c}">${r.lvl.t}</span>` +
+    `<span class="vals">${Math.round(r.temperature_2m)}° ${r.relative_humidity_2m}% ${Math.round(r.wind_gusts_10m)}km/h</span></div>`
+  ).join('');
+}
+
+async function loadMeteo() {
+  setStatus('meteo', 'Open-Meteo', 'load');
+  try {
+    const zlist = buildZones();
+    const lats = zlist.map(z=>z.lat.toFixed(2)).join(',');
+    const lons = zlist.map(z=>z.lon.toFixed(2)).join(',');
+    const url = BACKEND
+      ? `/api/meteo?lats=${lats}&lons=${lons}`
+      : `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}` +
+        `&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_gusts_10m` +
+        `&hourly=temperature_2m,relative_humidity_2m,wind_gusts_10m` +
+        `&daily=precipitation_sum&forecast_days=5&timezone=Europe%2FParis`;
+    const data = JSON.parse(await fetchText(url));
+    const arr = Array.isArray(data) ? data : [data];
+    const rows = zlist.map((z,i) => {
+      const c = arr[i]?.current || {};
+      const cbi = chandler(c.temperature_2m ?? 15, c.relative_humidity_2m ?? 60);
+      const adj = cbi + Math.max(0, ((c.wind_gusts_10m ?? 0) - 30) * 0.4);
+      return {...z, ...c, cbi: adj, lvl: cbiLevel(adj)};
+    }).sort((a,b) => (b.fire - a.fire) || (b.fireFrp - a.fireFrp) || (b.cbi - a.cbi));
+
+    riskRows = rows;
+    renderRiskList();
+
+    zoneMarkers.clearLayers();
+    rows.forEach(r => {
+      const col = r.fire ? '#ff4d4d'
+        : r.lvl.c==='b-extreme' ? '#ff4d4d' : r.lvl.c==='b-treseleve' ? '#ff6b35'
+        : r.lvl.c==='b-eleve' ? '#ffb347' : r.lvl.c==='b-modere' ? '#e8d44d' : '#3ddc84';
+      L.circleMarker([r.lat, r.lon], {
+        radius: r.fire ? 8 : 5, color: col, fillColor: col,
+        fillOpacity: r.fire ? .7 : .5, weight: r.fire ? 2.5 : 1.5
+      }).bindTooltip(
+        `<b>Zone surveillée — ${r.n}</b><br>` +
+        (r.fire ? `Feu actif détecté par satellite (puissance ${Math.round(r.fireFrp)} MW)<br>` : '') +
+        `Conditions météo de propagation : <b>${r.lvl.t}</b> (indice Chandler)<br>` +
+        `${Math.round(r.temperature_2m)}°C • humidité ${r.relative_humidity_2m}% • rafales ${Math.round(r.wind_gusts_10m)} km/h`
+      ).addTo(zoneMarkers);
+    });
+    renderForecast(arr, rows, zlist);
+    setStatus('meteo', 'Open-Meteo', 'ok');
+  } catch(e) {
+    setStatus('meteo', 'Open-Meteo', 'err');
+    if (mode !== 'air') document.getElementById('risk-list').innerHTML =
+      '<div style="padding:12px;color:var(--err)">Météo indisponible</div>';
+  }
+}
+
+/* ---------- prévision 5 jours : heatmap zones x jours ---------- */
+function renderForecast(arr, sortedRows, zlist) {
+  const cellColors = {'b-faible':'#12331f','b-modere':'#333012','b-eleve':'#3a2a12','b-treseleve':'#3a1c12','b-extreme':'#3a1212'};
+  const cellTxt = {'b-faible':'#3ddc84','b-modere':'#e8d44d','b-eleve':'#ffb347','b-treseleve':'#ff6b35','b-extreme':'#ff4d4d'};
+  const perZone = {};
+  zlist.forEach((z, zi) => {
+    const h = arr[zi]?.hourly, dl = arr[zi]?.daily;
+    if (!h || !h.time) return;
+    const days = {};
+    h.time.forEach((t, i) => {
+      const day = t.slice(0,10);
+      const o = days[day] = days[day] || {tMax:-99, rhMin:100, gustMax:0};
+      if (h.temperature_2m[i] > o.tMax) o.tMax = h.temperature_2m[i];
+      if (h.relative_humidity_2m[i] < o.rhMin) o.rhMin = h.relative_humidity_2m[i];
+      if (h.wind_gusts_10m[i] > o.gustMax) o.gustMax = h.wind_gusts_10m[i];
+    });
+    perZone[z.n] = Object.entries(days).slice(0,5).map(([day, o], di) => {
+      let v = chandler(o.tMax, o.rhMin) + Math.max(0, (o.gustMax - 30) * 0.4);
+      const rain = dl?.precipitation_sum?.[di] ?? 0;
+      if (rain >= 15) v -= 30; else if (rain >= 5) v -= 15;
+      return {day, v, lvl: cbiLevel(v), ...o, rain};
+    });
+  });
+  /* points chauds du moment en tête, puis zones statiques les plus à risque ;
+     grille plafonnée à 12 lignes pour rester lisible */
+  const fireByName = Object.fromEntries(sortedRows.map(r=>[r.n, r.fire]));
+  const all = sortedRows.map(r => r.n).filter(n => perZone[n]);
+  const fires = all.filter(n => fireByName[n]);
+  const rest = all.filter(n => !fireByName[n]);
+  const zoneOrder = [...fires, ...rest].slice(0, Math.max(12, fires.length));
+  if (!zoneOrder.length) return;
+  const nd = perZone[zoneOrder[0]].length;
+  const fmt = day => new Date(day+'T12:00').toLocaleDateString('fr-FR',{weekday:'short', day:'numeric'});
+  let html = `<div class="fx-table" style="grid-template-columns:110px repeat(${nd},1fr)">`;
+  html += `<div></div>` + perZone[zoneOrder[0]].map(c=>`<div class="dlabel">${fmt(c.day)}</div>`).join('');
+  zoneOrder.forEach(n => {
+    html += `<div class="zlabel">${fireByName[n]?'<span class="fdot">●</span> ':''}${n}</div>` + perZone[n].map(c =>
+      `<div class="cell" style="background:${cellColors[c.lvl.c]};color:${cellTxt[c.lvl.c]}" ` +
+      `title="${n} ${fmt(c.day)} : ${c.lvl.t}\n${Math.round(c.tMax)}°C, HR min ${Math.round(c.rhMin)}%, rafales ${Math.round(c.gustMax)} km/h, pluie ${c.rain.toFixed(1)} mm">` +
+      `${Math.max(0, Math.round(c.v))}</div>`
+    ).join('');
+  });
+  html += '</div>';
+  document.getElementById('fx-grid').innerHTML = html;
+  document.getElementById('dot-fx').className = 'dot ok';
+}
+
+/* ============================================================
+   PRÉVISION PAR DÉPARTEMENT (choroplèthe risque, 5 jours)
+   ============================================================ */
+const lvlColor = {'b-faible':'#3ddc84','b-modere':'#e8d44d','b-eleve':'#ffb347','b-treseleve':'#ff6b35','b-extreme':'#ff4d4d'};
+let prevByIdx = {}, prevDays = [], prevDay = 0, prevLoadedAt = 0;
+let prevCells = [], prevImgs = [], prevImgLayer = null, prevStep = 0.25;
+
+/* dégradé continu sur l'échelle Chandler (bornes des classes de cbiLevel) */
+const PREV_STOPS = [[0,'#3ddc84'],[50,'#e8d44d'],[75,'#ffb347'],[90,'#ff6b35'],[100,'#ff4d4d']];
+function prevGrad(v) {
+  v = Math.max(0, Math.min(105, v));
+  for (let i = PREV_STOPS.length - 1; i >= 0; i--) {
+    if (v >= PREV_STOPS[i][0]) {
+      const nxt = PREV_STOPS[i+1];
+      if (!nxt) return PREV_STOPS[i][1];
+      return lerpColor(PREV_STOPS[i][1], nxt[1], (v - PREV_STOPS[i][0]) / (nxt[0] - PREV_STOPS[i][0]));
+    }
+  }
+  return PREV_STOPS[0][1];
+}
+function showPrevDay() {
+  if (prevImgLayer) prevGroup.removeLayer(prevImgLayer);
+  prevImgLayer = prevImgs[prevDay] || null;
+  if (prevImgLayer) prevGroup.addLayer(prevImgLayer);
+}
+function prevCellTip(c) {
+  const d = c.d[prevDay];
+  if (!d) return 'Prévision indisponible';
+  const lvl = cbiLevel(d[0]);
+  return `<b>Risque feu prévu</b> (maille ≈ ${Math.round(prevStep*111)} km, ${fmtDay(prevDays[prevDay])})<br>` +
+    `Conditions météo de propagation : <b>${lvl.t}</b> (indice Chandler ${Math.max(0, d[0])})<br>` +
+    `Temp. max ${d[1]}°C • humidité min ${d[2]}%<br>` +
+    `Rafales max ${d[3]} km/h • pluie ${d[4]} mm`;
+}
+
+function fmtDay(day) {
+  return new Date(day+'T12:00').toLocaleDateString('fr-FR',{weekday:'short', day:'numeric'});
+}
+function prevStyle(f) {
+  const d = prevByIdx[f._idx]?.[prevDay];
+  if (!d) return {color:'#2a3a52', weight:.6, fillOpacity:0};
+  return {color:'#0a0e14', weight:.6, fillColor: lvlColor[d.lvl.c], fillOpacity:.45};
+}
+function prevTip(f) {
+  const n = deptCentroids[f._idx]?.n || '';
+  const d = prevByIdx[f._idx]?.[prevDay];
+  if (!d) return `<b>${n}</b><br>Prévision indisponible`;
+  return `<b>Risque feu prévu — ${n}</b> (${fmtDay(d.day)})<br>` +
+    `Conditions météo de propagation : <b>${d.lvl.t}</b> (indice Chandler ${Math.max(0, Math.round(d.v))})<br>` +
+    `Temp. max ${Math.round(d.tMax)}°C • humidité min ${Math.round(d.rhMin)}%<br>` +
+    `Rafales max ${Math.round(d.gustMax)} km/h • pluie ${d.rain.toFixed(1)} mm`;
+}
+
+/* sélecteur de jour, affiché sur la carte en mode prévision */
+const dayCtl = L.control({position:'topright'});
+dayCtl.onAdd = () => {
+  const div = L.DomUtil.create('div', 'day-ctl');
+  div.id = 'day-ctl';
+  L.DomEvent.disableClickPropagation(div);
+  return div;
+};
+let dayCtlOn = false;
+function dayCtlShow(on) {
+  if (on && !dayCtlOn) { dayCtl.addTo(map); dayCtlOn = true; renderDayCtl(); }
+  if (!on && dayCtlOn) { dayCtl.remove(); dayCtlOn = false; }
+}
+function renderDayCtl() {
+  const div = document.getElementById('day-ctl');
+  if (!div) return;
+  div.innerHTML = prevDays.map((day, i) =>
+    `<button class="${i===prevDay?'active':''}" data-d="${i}">${i===0?'auj.':fmtDay(day)}</button>`
+  ).join('') || '<button disabled>chargement…</button>';
+  div.querySelectorAll('button[data-d]').forEach(b => b.onclick = () => {
+    prevDay = +b.dataset.d;
+    renderDayCtl();
+    showPrevDay();
+    if (deptPrev) deptPrev.setStyle(prevStyle);
+  });
+}
+
+async function loadPrev(force) {
+  if (!force && Date.now() - prevLoadedAt < 30*60*1000) return;
+  setStatus('prev', 'Risque feu', 'load');
+  try {
+    await deptReady;
+    if (!deptCentroids.length) throw new Error('pas de centroïdes');
+    if (BACKEND) {
+      /* grille fine ~25 km : risque déjà calculé côté serveur pour 5 jours,
+         une image lissée par jour -> bascule instantanée */
+      const j = JSON.parse(await fetchText('/api/prevgrid'));
+      prevDays = j.days || []; prevStep = j.step || 0.25; prevCells = j.cells || [];
+      if (!prevCells.length) throw new Error('grille vide');
+      if (prevDay >= prevDays.length) prevDay = 0;
+      prevImgs = prevDays.map((_, di) =>
+        buildGridImage(prevCells, prevStep, c => prevGrad(c.d[di]?.[0] ?? 0)));
+      prevGroup.clearLayers();
+      prevImgLayer = null;
+      prevCells.forEach(c => {
+        L.rectangle([[c.lat - prevStep/2, c.lon - prevStep/2],
+                     [c.lat + prevStep/2, c.lon + prevStep/2]], {
+          renderer: canvasR, stroke: false, fillColor: '#000', fillOpacity: 0
+        }).bindTooltip(() => prevCellTip(c), {sticky: true}).addTo(prevGroup);
+      });
+      showPrevDay();
+    } else {
+      /* mode direct sans backend : choroplèthe départemental */
+      const lats = deptCentroids.map(z=>z.lat.toFixed(2)).join(',');
+      const lons = deptCentroids.map(z=>z.lon.toFixed(2)).join(',');
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}` +
+        `&daily=temperature_2m_max,wind_gusts_10m_max,precipitation_sum` +
+        `&hourly=relative_humidity_2m&forecast_days=5&timezone=Europe%2FParis`;
+      const data = JSON.parse(await fetchText(url));
+      const arr = Array.isArray(data) ? data : [data];
+      prevByIdx = {};
+      deptCentroids.forEach((z, i) => {
+        const dl = arr[i]?.daily, h = arr[i]?.hourly;
+        if (!dl || !dl.time) return;
+        const rhByDay = {};
+        (h?.time || []).forEach((t, hi) => {
+          const day = t.slice(0,10);
+          const v = h.relative_humidity_2m[hi];
+          if (v != null && (rhByDay[day] == null || v < rhByDay[day])) rhByDay[day] = v;
+        });
+        prevByIdx[i] = dl.time.map((day, di) => {
+          const tMax = dl.temperature_2m_max[di] ?? 15;
+          const rhMin = rhByDay[day] ?? 50;
+          const gustMax = dl.wind_gusts_10m_max[di] ?? 0;
+          const rain = dl.precipitation_sum[di] ?? 0;
+          let v = chandler(tMax, rhMin) + Math.max(0, (gustMax - 30) * 0.4);
+          if (rain >= 15) v -= 30; else if (rain >= 5) v -= 15;
+          return {day, v, lvl: cbiLevel(v), tMax, rhMin, gustMax, rain};
+        });
+      });
+      prevDays = arr[0]?.daily?.time || [];
+      if (prevDay >= prevDays.length) prevDay = 0;
+      if (deptPrev) deptPrev.setStyle(prevStyle);
+    }
+    prevLoadedAt = Date.now();
+    renderDayCtl();
+    setStatus('prev', 'Risque feu', 'ok');
+  } catch(e) { setStatus('prev', 'Risque feu', 'err'); }
+}
+
+/* ============================================================
+   QUALITÉ DE L'AIR (EAQI par département, Open-Meteo)
+   ============================================================ */
+let airLoadedAt = 0;
+let airRows = [];
+/* dégradé continu entre les couleurs officielles des classes EAQI : deux
+   mailles voisines de classe identique restent distinguables (sinon la grille
+   fine se fond en gros aplats et semble grossière) */
+const EAQI_STOPS = [[0,'#50f0e6'],[20,'#50ccaa'],[40,'#f0e641'],[60,'#ff5050'],[80,'#960032'],[100,'#7d2181']];
+function lerpColor(a, b, t) {
+  const pa = [1,3,5].map(i => parseInt(a.slice(i,i+2), 16));
+  const pb = [1,3,5].map(i => parseInt(b.slice(i,i+2), 16));
+  return 'rgb(' + pa.map((v,i) => Math.round(v + (pb[i]-v)*t)).join(',') + ')';
+}
+function eaqiGrad(v) {
+  v = Math.max(0, Math.min(105, v));
+  for (let i = EAQI_STOPS.length - 1; i >= 0; i--) {
+    if (v >= EAQI_STOPS[i][0]) {
+      const nxt = EAQI_STOPS[i+1];
+      if (!nxt) return EAQI_STOPS[i][1];
+      return lerpColor(EAQI_STOPS[i][1], nxt[1], (v - EAQI_STOPS[i][0]) / (nxt[0] - EAQI_STOPS[i][0]));
+    }
+  }
+  return EAQI_STOPS[0][1];
+}
+/* rendu lissé (air + prévision) : les mailles sont dessinées dans un canvas
+   (projection Mercator pour coller à la carte), flouté puis posé en
+   imageOverlay ; colorOf(cell) donne la couleur de chaque maille */
+function buildGridImage(cells, step, colorOf) {
+  const [lonMin, latMin, lonMax, latMax] = FR_BBOX;
+  const px = 8;
+  const W = Math.round((lonMax - lonMin) / step) * px;
+  const mercY = lat => Math.log(Math.tan(Math.PI/4 + lat * Math.PI/360));
+  const yTop = mercY(latMax), yBot = mercY(latMin);
+  const H = Math.round(W * (yTop - yBot) / ((lonMax - lonMin) * Math.PI / 180));
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  cells.forEach(c => {
+    const x = (c.lon - step/2 - lonMin) / (lonMax - lonMin) * W;
+    const y = (yTop - mercY(c.lat + step/2)) / (yTop - yBot) * H;
+    const y2 = (yTop - mercY(c.lat - step/2)) / (yTop - yBot) * H;
+    const w = step / (lonMax - lonMin) * W;
+    ctx.fillStyle = colorOf(c);
+    ctx.fillRect(x - .5, y - .5, w + 1, (y2 - y) + 1);
+  });
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const octx = out.getContext('2d');
+  octx.filter = 'blur(6px)';
+  octx.drawImage(cv, 0, 0);
+  return L.imageOverlay(out.toDataURL(), [[latMin, lonMin], [latMax, lonMax]],
+                        {opacity: .6, interactive: false});
+}
+function eaqiColor(v) {
+  if (v <= 20) return '#50f0e6';
+  if (v <= 40) return '#50ccaa';
+  if (v <= 60) return '#f0e641';
+  if (v <= 80) return '#ff5050';
+  if (v <= 100) return '#960032';
+  return '#7d2181';
+}
+function eaqiLabel(v) {
+  if (v <= 20) return 'Bon';
+  if (v <= 40) return 'Correct';
+  if (v <= 60) return 'Moyen';
+  if (v <= 80) return 'Mauvais';
+  if (v <= 100) return 'Très mauvais';
+  return 'Extrême';
+}
+function renderAirList() {
+  if (mode !== 'air') return;
+  const el = document.getElementById('risk-list');
+  if (!airRows.length) {
+    el.innerHTML = '<div style="padding:12px;color:var(--txt-dim)">Chargement…</div>';
+    return;
+  }
+  el.innerHTML = airRows.map(r => {
+    const col = eaqiColor(r.aqi);
+    return `<div class="risk-row"><span class="zone">${r.n}</span>` +
+      `<span class="badge" style="background:${col}22;color:${col}">${Math.round(r.aqi)} ${eaqiLabel(r.aqi)}</span>` +
+      `<span class="vals">PM2.5 ${r.pm25 ?? '?'} • PM10 ${r.pm10 ?? '?'}</span></div>`;
+  }).join('');
+}
+async function loadAir(force) {
+  if (!force && Date.now() - airLoadedAt < 30*60*1000) return; // cache 30 min
+  setStatus('air', 'Air EAQI', 'load');
+  try {
+    await deptReady;
+    if (!deptCentroids.length) throw new Error('pas de centroïdes');
+    let cells, step;
+    if (BACKEND) {
+      /* grille fine ~25 km générée côté serveur (masque France + cache) */
+      const j = JSON.parse(await fetchText('/api/airgrid'));
+      cells = j.cells; step = j.step || 0.25;
+    } else {
+      /* mode direct : repli sur les centroïdes départementaux
+         (une grille de ~900 points ferait une URL trop longue) */
+      const lats = deptCentroids.map(z=>z.lat.toFixed(2)).join(',');
+      const lons = deptCentroids.map(z=>z.lon.toFixed(2)).join(',');
+      const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats}&longitude=${lons}` +
+        `&current=european_aqi,pm2_5,pm10,ozone&timezone=Europe%2FParis`;
+      const data = JSON.parse(await fetchText(url));
+      const arr = Array.isArray(data) ? data : [data];
+      cells = deptCentroids.map((z, i) => {
+        const c = arr[i]?.current;
+        return c && c.european_aqi != null
+          ? {lat: z.lat, lon: z.lon, aqi: c.european_aqi,
+             pm25: c.pm2_5, pm10: c.pm10, o3: c.ozone} : null;
+      }).filter(Boolean);
+      step = 0.8;
+    }
+    airGroup.clearLayers();
+    airGroup.addLayer(buildGridImage(cells, step, c => eaqiGrad(c.aqi)));
+    /* mailles invisibles par-dessus l'image : uniquement pour le survol */
+    const kmLabel = Math.round(step * 111);
+    cells.forEach(c => {
+      L.rectangle([[c.lat - step/2, c.lon - step/2], [c.lat + step/2, c.lon + step/2]], {
+        renderer: canvasR, stroke: false,
+        fillColor: '#000', fillOpacity: 0
+      }).bindTooltip(
+        `<b>Qualité de l'air</b> (maille ≈ ${kmLabel} km)<br>` +
+        `Indice européen EAQI : <b>${Math.round(c.aqi)}</b> (${eaqiLabel(c.aqi)})<br>` +
+        `Particules fines PM2.5 : ${c.pm25 != null ? Math.round(c.pm25) : '?'} µg/m³ • PM10 : ${c.pm10 != null ? Math.round(c.pm10) : '?'} µg/m³<br>` +
+        `Ozone : ${c.o3 != null ? Math.round(c.o3) : '?'} µg/m³`,
+        {sticky: true}
+      ).addTo(airGroup);
+    });
+    /* classement des départements : valeur de la maille la plus proche du centroïde */
+    airRows = deptCentroids.map(z => {
+      let best = null, bd = Infinity;
+      cells.forEach(c => {
+        const dd = (c.lat - z.lat)**2 + (c.lon - z.lon)**2;
+        if (dd < bd) { bd = dd; best = c; }
+      });
+      return best ? {n: z.n, aqi: best.aqi,
+                     pm25: best.pm25 != null ? Math.round(best.pm25) : null,
+                     pm10: best.pm10 != null ? Math.round(best.pm10) : null} : null;
+    }).filter(Boolean).sort((a,b) => b.aqi - a.aqi);
+    airLoadedAt = Date.now();
+    renderAirList();
+    setStatus('air', 'Air EAQI', 'ok');
+  } catch(e) { setStatus('air', 'Air EAQI', 'err'); }
+}
+
+/* ============================================================
+   ACTUALITÉS
+   ============================================================ */
+const newsQueries = [
+  '"feu de forêt" OR "feux de forêt" OR "incendie de forêt"',
+  'incendie pompiers hectares',
+  'SDIS incendie OR "sécurité civile" feu',
+];
+const HOT_WORDS = /hectares|évacu|canadair|dash|violent|majeur|hors de contrôle|victime|blessé/i;
+function timeAgo(dt) {
+  const m = Math.floor((Date.now() - dt) / 60000);
+  if (m < 60) return m + ' min';
+  if (m < 1440) return Math.floor(m/60) + ' h';
+  return Math.floor(m/1440) + ' j';
+}
+function renderNews(items) {
+  document.getElementById('news-count').textContent = items.length + ' articles / 48h';
+  document.getElementById('news-list').innerHTML = items.map(it =>
+    `<div class="news-item${HOT_WORDS.test(it.title)?' hot':''}">` +
+    `<a href="${it.link}" target="_blank" rel="noopener">${it.title.replace(/</g,'&lt;')}</a>` +
+    `<div class="news-meta"><span class="src">${it.src}</span><span>${timeAgo(new Date(it.date))}</span></div></div>`
+  ).join('');
+}
+async function loadNews() {
+  setStatus('news', 'Actus', 'load');
+  try {
+    if (BACKEND) {
+      const r = await fetch('/api/news', {signal: AbortSignal.timeout(25000)});
+      if (!r.ok) throw new Error('backend news ' + r.status);
+      renderNews(await r.json());
+    } else {
+      const all = new Map();
+      await Promise.allSettled(newsQueries.map(async q => {
+        const url = 'https://news.google.com/rss/search?q=' +
+          encodeURIComponent(q + ' when:2d') + '&hl=fr&gl=FR&ceid=FR:fr';
+        const xml = new DOMParser().parseFromString(await fetchText(url), 'text/xml');
+        xml.querySelectorAll('item').forEach(it => {
+          const title = it.querySelector('title')?.textContent || '';
+          const key = title.toLowerCase().replace(/\W+/g,' ').slice(0,60);
+          if (all.has(key)) return;
+          all.set(key, {
+            title,
+            link: it.querySelector('link')?.textContent || '#',
+            date: +new Date(it.querySelector('pubDate')?.textContent || Date.now()),
+            src: it.querySelector('source')?.textContent || '',
+          });
+        });
+      }));
+      const items = [...all.values()].sort((a,b) => b.date - a.date).slice(0, 60);
+      if (!items.length) throw new Error('no items');
+      renderNews(items);
+    }
+    setStatus('news', 'Actus', 'ok');
+  } catch(e) {
+    setStatus('news', 'Actus', 'err');
+    document.getElementById('news-list').innerHTML =
+      '<div style="padding:12px;color:var(--err)">Flux indisponible. Réessayer.</div>';
+  }
+}
+
+/* ============================================================
+   COMPTES X OFFICIELS + LIENS
+   ============================================================ */
+const accounts = [
+  ['SecCivileFrance','Sécurité civile'], ['Pompiers_fr','Fédération pompiers'],
+  ['meteofrance','Météo-France'], ['VigiMeteoFrance','Vigilance météo'],
+  ['SDIS2B','SDIS Haute-Corse'], ['sdis2a','SDIS Corse-du-Sud'],
+  ['SDIS13','Bouches-du-Rhône'], ['SDIS83','Var'],
+  ['Sdis30','Gard'], ['SDIS34','Hérault'],
+  ['Sdis11Aude','Aude'], ['sdis66','Pyrénées-Orientales'],
+  ['SDIS84','Vaucluse'], ['Sdis06','Alpes-Maritimes'],
+  ['SDIS33Gironde','Gironde'], ['SDIS40','Landes'],
+  ['Prefet13','Préfet 13'], ['Prefet83Var','Préfet 83'],
+  ['VISOV1','VISOV (MSGU)'], ['CopernicusEMS','Copernicus EMS'],
+];
+document.getElementById('acc-list').innerHTML = accounts.map(([h,n]) =>
+  `<a class="link-row" href="https://x.com/${h}" target="_blank" rel="noopener">@${h}<span class="d">${n}</span></a>`
+).join('');
+const links = [
+  ['https://maps.effis.emergency.copernicus.eu/effis-current-situation','EFFIS carte situation','Copernicus : foyers, zones brûlées, danger'],
+  ['https://firms.modaps.eosdis.nasa.gov/map/#d:24hrs;l:viirs;@2.5,46.5,6z','NASA FIRMS carte','Foyers satellites temps quasi réel'],
+  ['https://meteofrance.com/meteo-des-forets','Météo des forêts','Danger feu officiel Météo-France (juin-sept)'],
+  ['https://vigilance.meteofrance.fr','Vigilance Météo-France','Alertes météo départementales'],
+  ['https://www.risque-prevention-incendie.fr','Accès massifs forestiers','Fermetures de massifs (13, 83, 84, 30, 34, Corse)'],
+  ['https://bdiff.agriculture.gouv.fr','BDIFF','Base de données historique des incendies de forêt'],
+  ['https://www.georisques.gouv.fr/risques/feux-de-forets','GéoRisques','Risque feu de forêt par commune'],
+  ['https://emergency.copernicus.eu/mapping/list-of-activations-rapid','Copernicus EMS rapid mapping','Cartographies d\'urgence activées'],
+];
+document.getElementById('links-list').innerHTML = links.map(([u,t,dsc]) =>
+  `<a class="link-row" href="${u}" target="_blank" rel="noopener">${t}<span class="d">${dsc}</span></a>`
+).join('');
+
+/* ============================================================
+   ORCHESTRATION
+   ============================================================ */
+async function refreshAll() {
+  loadNews();
+  await loadFirms();      // d'abord les feux réels…
+  loadMeteo();            // …puis la météo sur zones statiques + feux
+  if (mode === 'air') loadAir();
+  if (mode === 'prev') loadPrev();
+  refreshWms();
+}
+
+(async () => {
+  try {
+    const r = await fetch('/api/health', {signal: AbortSignal.timeout(2000)});
+    if (r.ok) {
+      const h = await r.json();
+      BACKEND = true;
+      EFFIS = '/wms/effis';
+      document.getElementById('backend-tag').style.display = '';
+      if (h.firms_key) document.getElementById('firms-panel').style.display = 'none';
+    }
+  } catch(e) { /* mode direct */ }
+  initLayers();
+  setStatus('effis', 'EFFIS WMS', 'ok');
+  refreshAll();
+})();
+</script>
+</body>
+</html>
