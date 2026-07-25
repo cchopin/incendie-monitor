@@ -580,3 +580,15 @@ async def _tile_gc():
 @app.get("/")
 async def index():
     return FileResponse(ROOT / "index.html")
+
+
+@app.get("/favicon.png")
+async def favicon():
+    return FileResponse(ROOT / "static" / "favicon.png",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/apple-touch-icon.png")
+async def touch_icon():
+    return FileResponse(ROOT / "static" / "apple-touch-icon.png",
+                        headers={"Cache-Control": "public, max-age=86400"})
