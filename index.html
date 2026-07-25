@@ -313,10 +313,6 @@ function wms(layer, time, opacity) {
   return l;
 }
 const layerDefs = [
-  {id:'hs24',     name:'Foyers satellites 24h (WMS)',     color:'#ff4d4d', on:false, make: () => wms('all.hs', `${d(-1)}/${d(0)}`),
-   desc:'Détections satellites des dernières 24 h (raster Copernicus EFFIS)'},
-  {id:'hs7',      name:'Foyers satellites 7 jours (WMS)', color:'#b03030', on:false, make: () => wms('all.hs', `${d(-7)}/${d(0)}`),
-   desc:'Détections satellites des 7 derniers jours (raster Copernicus EFFIS)'},
   {id:'ba',       name:'Zones brûlées temps réel',        color:'#7a3b2e', on:true,  make: () => wms('effis.nrt.ba.poly', null, 0.75),
    desc:'Périmètres brûlés cartographiés en temps quasi réel (EFFIS)'},
   {id:'baSeason', name:'Zones brûlées (saison)',          color:'#5a2b1e', on:false, make: () => wms('modis.ba.poly.season', null, 0.7),
@@ -421,7 +417,7 @@ function setMode(m) {
   } else { // air
     map.removeLayer(firmsGroup); map.removeLayer(zoneMarkers);
     map.removeLayer(prevGroup); map.addLayer(airGroup);
-    setLayer('fwi', false); setLayer('ba', false); setLayer('hs24', false);
+    setLayer('fwi', false); setLayer('ba', false);
     renderAirList();
     loadAir();
   }
