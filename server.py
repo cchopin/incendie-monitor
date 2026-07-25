@@ -75,8 +75,10 @@ _locks: dict = {}
 # env TRUSTED_IPS) ne sont pas limitées.
 TRUSTED_IPS = {x.strip() for x in os.environ.get("TRUSTED_IPS", "").split(",")
                if x.strip()} | {"127.0.0.1", "::1"}
-UPSTREAM_PER_MIN = 60          # fetchs amont/minute autorisés aux non-confiance
-_budget: list = []
+# budgets séparés : un débordement de tuiles (couche WMS activée pendant une
+# panne EFFIS par ex.) ne doit pas affamer les petites API vitales
+UPSTREAM_LIMITS = {"tiles": 60, "api": 30}   # fetchs amont/minute
+_budgets: dict = {"tiles": [], "api": []}
 
 
 def client_ip(request: Request) -> str:
@@ -86,17 +88,18 @@ def client_ip(request: Request) -> str:
             or (request.client.host if request.client else ""))
 
 
-def make_allow(request: Request):
+def make_allow(request: Request, pool: str = "api"):
     """Retourne un callable évalué au moment du fetch amont uniquement."""
     def allow():
         if client_ip(request) in TRUSTED_IPS:
             return True
         now = time.time()
-        while _budget and _budget[0] < now - 60:
-            _budget.pop(0)
-        if len(_budget) >= UPSTREAM_PER_MIN:
+        budget = _budgets[pool]
+        while budget and budget[0] < now - 60:
+            budget.pop(0)
+        if len(budget) >= UPSTREAM_LIMITS[pool]:
             return False
-        _budget.append(now)
+        budget.append(now)
         return True
     return allow
 
@@ -495,6 +498,21 @@ async def prevgrid():
 
 
 # ---------------- tuiles EFFIS (cache disque) ----------------
+# disjoncteur : quand EFFIS est en panne, inutile de le marteler (et de brûler
+# le budget amont) — après 5 échecs consécutifs, pause de 60 s
+_effis_down = {"fails": 0, "until": 0.0}
+
+
+def _effis_ok() -> bool:
+    return time.time() >= _effis_down["until"]
+
+def _effis_fail():
+    _effis_down["fails"] += 1
+    if _effis_down["fails"] >= 5:
+        _effis_down["until"] = time.time() + 60
+        _effis_down["fails"] = 0
+
+
 @app.get("/wms/effis")
 async def effis(request: Request):
     qs = str(request.url.query)
@@ -514,26 +532,32 @@ async def effis(request: Request):
     if f.exists() and time.time() - f.stat().st_mtime < TTL_TILES:
         return FileResponse(f, media_type="image/png",
                             headers={"X-Cache": "HIT"})
-    if not make_allow(request)():
-        if f.exists():             # budget amont épuisé : tuile périmée
+
+    def stale_or(status: int):
+        if f.exists():
             return FileResponse(f, media_type="image/png",
                                 headers={"X-Cache": "STALE"})
-        return Response(status_code=503)
+        return Response(status_code=status)
+
+    if not _effis_ok():
+        return stale_or(503)
+    if not make_allow(request, "tiles")():
+        return stale_or(503)
     try:
         r = await client.get(f"{EFFIS_UPSTREAM}?{qs}")
         r.raise_for_status()
         ctype = r.headers.get("content-type", "")
         if "image" not in ctype:   # erreur XML du serveur : ne pas cacher
+            _effis_fail()
             return Response(r.content, media_type=ctype, status_code=502)
+        _effis_down["fails"] = 0
         if len(r.content) <= 5_000_000:   # garde-fou disque
             f.write_bytes(r.content)
         return Response(r.content, media_type="image/png",
                         headers={"X-Cache": "MISS"})
     except httpx.HTTPError:
-        if f.exists():             # amont en panne : tuile périmée plutôt que rien
-            return FileResponse(f, media_type="image/png",
-                                headers={"X-Cache": "STALE"})
-        return Response(status_code=502)
+        _effis_fail()
+        return stale_or(502)
 
 
 # ---------------- entretien du cache disque ----------------
