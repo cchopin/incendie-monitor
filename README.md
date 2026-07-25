@@ -2,11 +2,15 @@
 
 Dashboard temps réel de suivi des feux de forêt en France : détections satellites, danger météo, qualité de l'air. Frontend Leaflet en un seul fichier `index.html`, backend de cache FastAPI optionnel.
 
+![Mode foyers : détections satellites, principaux incidents, actualités et danger feu 5 jours](docs/dashboard-foyers.png)
+
 ## Modes d'affichage
 
 - **Foyers** : points chauds satellites VIIRS (NASA FIRMS) regroupés en incidents, zones brûlées EFFIS, panneau des principaux foyers en cours triés par puissance radiative.
 - **Risque feu** : indice de danger météo (Chandler ajusté vent/pluie) calculé sur une grille d'environ 25 km couvrant la métropole, lissé en dégradé continu, avec sélecteur de jour (aujourd'hui à J+4) et grille 5 jours pour les zones prioritaires (feux en cours d'abord).
 - **Qualité de l'air** : indice européen EAQI sur la même grille fine (modèle CAMS ~11 km), avec classement par département (PM2.5, PM10, ozone).
+
+![Mode qualité de l'air : grille EAQI ~25 km lissée — les panaches de fumée des incendies en cours sont visibles en Gironde et sur la Côte d'Azur](docs/qualite-air.png)
 
 C'est un indicateur simplifié : se référer à la [météo des forêts](https://meteofrance.com/meteo-des-forets) de Météo-France pour le danger officiel.
 
